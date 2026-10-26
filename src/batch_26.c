@@ -1933,6 +1933,11 @@ uint32 resource002_sub_800fc854(void)
     uint32 owner, resource, bytes, destination;
 
     FUNCTION_MARKER(0x800FC854, "ACE3.BIN");
+#if AP_WEB
+    owner = r_u32(0x80112E18);
+    game_web_movie_prepare(r_u32(owner + 0x11058), owner, 1);
+    return sub_8002c928(r_u32(owner + 0x11058), r_u32(owner + 0x11060), r_u32(owner + 0x1105C), 0x1000, 0x800FC750);
+#endif
     owner = r_u32(0x80112E18);
     resource = r_u32(owner + 0x11058);
     destination = r_u32(owner + 0x11060);
@@ -1945,6 +1950,10 @@ uint32 resource002_sub_800fc89c(uint32 nonblocking)
     uint32 owner, remaining;
 
     FUNCTION_MARKER(0x800FC89C, "ACE3.BIN");
+#if AP_WEB
+    (void)nonblocking;
+    return game_web_movie_poll(r_u32(0x80112E18));
+#endif
     if (nonblocking)
     {
         owner = r_u32(0x80112E18);
@@ -2013,6 +2022,10 @@ uint32 resource002_sub_800fc970(uint32 mode)
     sint32 words;
 
     FUNCTION_MARKER(0x800FC970, "ACE3.BIN");
+#if AP_WEB
+    (void)mode;
+    return game_web_movie_decode(r_u32(0x80112E18));
+#endif
     owner = r_u32(0x80112E18);
     if (r_u8(owner + 4))
         return 1;

@@ -326,6 +326,20 @@ uint32 game_cd_copy_sector(uint32 destination, uint32 words)
     return 1;
 }
 
+uint32 game_cd_publish_metadata(const uint8 *payload)
+{
+    void *destination;
+    if (game_cd_data_notification_pending)
+        return 0;
+    destination = psx_addr(r_u32(0x800BCBB0), 516);
+    if (!destination)
+        abort();
+    memcpy(destination, payload, 516);
+    game_cd_data_notification_pending = 1;
+    psx_wait_signal_service(6);
+    return 1;
+}
+
 uint32 game_cd_read_resource_sector_sync(void)
 {
     uint32 sector[585];

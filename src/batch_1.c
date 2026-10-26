@@ -1,4 +1,5 @@
 #include "game_functions.h"
+#include <stdlib.h>
 #include <string.h>
 
 static uint32 pad_input_field;
@@ -10,6 +11,10 @@ void game_run(void)
     uint32 flags;
     uint32 args;
     uint32 result;
+    uint32 frame_ready;
+    uint32 pending_display = 0;
+    uint32 previous_draw_complete = 0;
+    PSX_RECT previous_draw = {0};
 
     FUNCTION_MARKER(0x800261A8, "ACE3.BIN");
     /* The reviewed __main replacement is supplied by the native CRT */
@@ -18,6 +23,7 @@ void game_run(void)
     SetDispMask(1);
     for (;;)
     {
+        gpu_frame_begin();
         sub_80025bc8();
         sub_80026050();
         sub_80026e84();
@@ -45,6 +51,14 @@ void game_run(void)
         state = r_u32(0x800BCE60);
         w_u32(state + 0x20, result);
         ResetRCnt(0xF2000001);
+        /* Publish the completed page before the next original flip */
+        if (pending_display && !gpu_frame_skipped())
+        {
+            gpu_frame_end();
+            gpu_present();
+            gpu_frame_begin();
+            pending_display = 0;
+        }
         sub_800260c0();
         state = r_u32(0x800BCE60);
         flags = r_u32(state);
@@ -53,6 +67,11 @@ void game_run(void)
             w_u32(state, flags & 0xFFFFFFF7);
             DrawSync(0);
         }
+        frame_ready = game_frame_display_ready(&previous_draw, &previous_draw_complete);
+        pending_display = frame_ready && gpu_frame_skipped();
+        gpu_frame_end();
+        if (frame_ready)
+            gpu_present();
         state = r_u32(0x800BCE60);
         flags = r_u32(state);
         if (flags & 0x10000000)
@@ -910,8 +929,13 @@ sint32 sub_8002ae0c(void)
         w_u32(r_u32(0x800BCBA8) + 0xC, 5);
         return result;
     }
-    cd_read_sectors(4, 0x800C1368, r_u32(0x800BCE78));
-    cd_read_sectors(4, 0x800C136C, r_u32(0x800BCE7C));
+    if (game_use_extracted_assets())
+        game_read_archive_headers(r_u32(0x800BCE78), r_u32(0x800BCE7C));
+    else
+    {
+        cd_read_sectors(4, 0x800C1368, r_u32(0x800BCE78));
+        cd_read_sectors(4, 0x800C136C, r_u32(0x800BCE7C));
+    }
     header = r_u32(0x800BCE78);
     word = r_u32(header);
     if (word == 0x45334341)
@@ -1228,6 +1252,11 @@ uint32 resource_poll_cd(void)
     sint32 progress;
 
     FUNCTION_MARKER(0x8002A2C0, "ACE3.BIN");
+    if (game_resource_music_active())
+    {
+        game_poll_resource_music();
+        return 0;
+    }
     state = r_u32(0x800BCBA8);
     switch (r_u32(state))
     {
@@ -1381,7 +1410,7 @@ sint32 resource_begin_read(uint32 entry, uint32 dst, uint32 aux, uint32 callback
     state = r_u32(0x800BCBA8);
     if (r_u32(state))
         return -1;
-    sync = CdSync(1, (uint8 *)psx_addr(state + 0x28, 8));
+    sync = game_use_extracted_assets() ? CdlComplete : CdSync(1, (uint8 *)psx_addr(state + 0x28, 8));
     if (sync != 2)
         return 0;
     if ((sint32)(native_entry ? native_entry[0] : r_u32(entry)) >= 0)
@@ -1390,6 +1419,7 @@ sint32 resource_begin_read(uint32 entry, uint32 dst, uint32 aux, uint32 callback
         xport_guest_call3(callback, 0xFFFFFFFD, 0, 0);
         return 1;
     }
+    game_stop_resource_music();
     state = r_u32(0x800BCBA8);
     stream = r_u32(0x800BCBAC);
     w_u32(state + 0x24, 0);
@@ -1415,6 +1445,21 @@ sint32 resource_begin_read(uint32 entry, uint32 dst, uint32 aux, uint32 callback
                 sectors = (sint32)units + 510;
             start = r_u32(stream + 0x10);
             w_u32(stream + 0x2C, start + (uint32)(sectors >> 9));
+            if (game_use_extracted_assets())
+            {
+                sint32 loaded = !native_entry && game_read_resource_file(entry, dst, units * 4);
+                w_u32(stream + 0x18, loaded ? dst + units * 4 : dst);
+                w_u32(stream + 0x14, 0);
+                w_u32(r_u32(0x800BCBB0), 0);
+                if (!loaded)
+                {
+                    xport_message_error("Ace Combat 3 - Resource error", "Cannot read extracted ACE_BPB resource");
+                    abort();
+                }
+                if (callback)
+                    xport_guest_call3(callback, 0, 0, 0);
+                return 1;
+            }
             break;
         case 1:
             w_u32(stream + 0xC, 0x80029FE4);
@@ -1442,6 +1487,8 @@ sint32 resource_begin_read(uint32 entry, uint32 dst, uint32 aux, uint32 callback
             w_u32(stream + 0x3C, counter + 2 + (uint32)((sint32)(units * 6) / 15));
             break;
         case 2:
+            if (game_use_extracted_assets() && game_start_resource_music(start, callback, flags, 0))
+                return 1;
             sub_8002999c(1);
             if (flags & 0x1000)
             {
@@ -1506,6 +1553,8 @@ sint32 resource_begin_read(uint32 entry, uint32 dst, uint32 aux, uint32 callback
         default:
             return -1;
     }
+    if (mode == 3 && game_use_extracted_assets() && game_start_resource_music(start, callback, flags, 1))
+        return 1;
     resource_issue_seek();
     return 1;
 }

@@ -108,6 +108,10 @@ uint32 resource002_sub_800fc5a8(void)
     uint32 owner;
 
     FUNCTION_MARKER(0x800FC5A8, "ACE3.BIN");
+#if AP_WEB
+    w_u8(r_u32(0x80112E18) + 3, 1);
+    return 1;
+#endif
     DecDCTReset(0);
     DecDCToutCallback(resource002_movie_output);
     owner = r_u32(0x80112E18);
@@ -167,6 +171,9 @@ uint32 resource002_sub_800fcc7c(uint32 owner)
     sint32 previous, height, width, scale, size;
 
     FUNCTION_MARKER(0x800FCC7C, "ACE3.BIN");
+#if AP_WEB
+    return game_web_movie_poll(owner);
+#endif
     state = r_u32(0x80112DC4);
     phase = r_u32(state + 280);
     if (phase == 1)

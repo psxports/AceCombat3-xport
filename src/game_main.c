@@ -1,6 +1,101 @@
 #include "game_functions.h"
 #include <string.h>
 
+static uint32 game_frame_contains(const PSX_RECT *draw, const PSX_RECT *display)
+{
+    return draw->w > 0 && draw->h > 0 && display->w > 0 && display->h > 0 &&
+           draw->x <= display->x && draw->y <= display->y &&
+           (sint32)draw->x + draw->w >= (sint32)display->x + display->w &&
+           (sint32)draw->y + draw->h >= (sint32)display->y + display->h;
+}
+
+uint32 game_frame_display_ready(PSX_RECT *previous_draw, uint32 *previous_complete)
+{
+    uint32 game = r_u32(0x800BCE60);
+    uint32 buffer = r_u32(0x800BCE58) + r_u32(game + 4) * 4116;
+    uint32 draw_address = r_u32(buffer);
+    uint32 display_address = r_u32(buffer + 4);
+    uint32 movie = r_u32(game) & 4;
+    uint32 complete = !gpu_frame_skipped() && !movie;
+    uint32 ready;
+    PSX_RECT draw, display;
+    draw.x = r_s16(draw_address);
+    draw.y = r_s16(draw_address + 2);
+    draw.w = r_s16(draw_address + 4);
+    draw.h = r_s16(draw_address + 6);
+    display.x = r_s16(display_address);
+    display.y = r_s16(display_address + 2);
+    display.w = r_s16(display_address + 4);
+    display.h = r_s16(display_address + 6);
+    /* A skipped OT leaves its page unchanged even after the original flip */
+    ready = movie || (complete && game_frame_contains(&draw, &display)) ||
+            (*previous_complete && game_frame_contains(previous_draw, &display));
+    if (movie)
+        *previous_complete = 0;
+    else if (complete)
+    {
+        *previous_draw = draw;
+        *previous_complete = 1;
+    }
+    return ready;
+}
+
+#if AP_WEB && defined(_DEBUG)
+    #include <emscripten.h>
+EMSCRIPTEN_KEEPALIVE void game_web_debug_frame_skip(sint32 enabled)
+{
+    gpu_set_frame_skip(enabled);
+}
+
+EMSCRIPTEN_KEEPALIVE const uint32 *game_web_debug_snapshot(void)
+{
+    static uint32 snapshot[34];
+    DISPENV display = {0};
+    uint32 index, nonzero = 0;
+    uint32 game = r_u32(0x800BCE60);
+    uint32 scene = r_u32(0x800BCE54);
+    uint32 queue = r_u32(0x800BCBBC);
+    snapshot[0] = game;
+    snapshot[1] = game ? r_u32(game) : 0;
+    snapshot[2] = game ? r_u32(game + 0x24) : 0;
+    snapshot[3] = game ? r_u32(game + 0x20) : 0;
+    snapshot[4] = scene;
+    snapshot[5] = scene ? r_u32(scene) : 0;
+    snapshot[6] = scene ? r_u32(scene + 4) : 0;
+    snapshot[7] = queue ? r_u32(queue) : 0;
+    snapshot[8] = queue ? r_u32(queue + 4) : 0;
+    snapshot[9] = queue ? r_u32(queue + 0x148) : 0;
+    snapshot[10] = queue ? r_u32(queue + 0x174) : 0;
+    snapshot[11] = game_resource_music_active();
+    snapshot[12] = game ? r_u32(game + 0x120) : 0;
+    snapshot[13] = game ? r_u32(game + 0x124) : 0;
+    snapshot[14] = game ? r_u32(game + 0x128) : 0;
+    snapshot[15] = game ? r_u32(game + 0x12C) : 0;
+    snapshot[16] = r_u32(0x800BD044);
+    snapshot[17] = snapshot[16] ? r_u32(snapshot[16]) : 0;
+    snapshot[18] = r_u32(0x800BD048);
+    snapshot[19] = snapshot[18] ? r_u32(snapshot[18] + 4) : 0;
+    snapshot[20] = snapshot[18] ? r_u32(snapshot[18] + 44) : 0;
+    snapshot[21] = snapshot[18] ? r_u32(snapshot[18] + 24) : 0;
+    snapshot[22] = snapshot[18] ? r_u32(snapshot[18] + 32) : 0;
+    snapshot[23] = g_xport_audio_submitted_buffers;
+    snapshot[24] = g_xport_audio_nonzero_buffers;
+    snapshot[25] = g_xport_audio_peak;
+    snapshot[26] = snapshot[18] ? r_u32(snapshot[18]) : 0;
+    gpu_get_display_env(&display);
+    for (index = 0; index < GPU_VRAM_WIDTH * GPU_VRAM_HEIGHT; ++index)
+        nonzero += VRAM[index] != 0;
+    snapshot[27] = nonzero;
+    snapshot[28] = (uint16)display.disp.x | ((uint32)(uint16)display.disp.y << 16);
+    snapshot[29] = (uint16)display.disp.w | ((uint32)(uint16)display.disp.h << 16);
+    snapshot[30] = display.isrgb24;
+    snapshot[31] = gpu_frame_skipped();
+    snapshot[32] = gpu_skipped_frames();
+    snapshot[33] = gpu_get_raster();
+    return snapshot;
+}
+#endif
+
 /* Original ResetGraph environment owns the detected GPU type */
 const uint32 xport_gpu_graph_type_address = 0x800BB964;
 

@@ -15,7 +15,25 @@ void game_cd_poll_stream(void);
 uint32 game_cd_ready_callback(uint32 target);
 uint32 game_cd_sync_callback(uint32 target);
 void game_bind_sdk(void);
+uint32 game_frame_display_ready(PSX_RECT *previous_draw, uint32 *previous_complete);
 sint32 game_mount_data(uint32 disc);
+sint32 game_use_extracted_assets(void);
+sint32 game_read_resource_file(uint32 entry, uint32 destination, uint32 bytes);
+void game_read_archive_headers(uint32 bp, uint32 sp);
+sint32 game_start_resource_music(uint32 start, uint32 callback, uint32 flags, uint32 data_stream);
+uint32 game_cd_publish_metadata(const uint8 *payload);
+sint32 game_resource_music_active(void);
+void game_poll_resource_music(void);
+void game_stop_resource_music(void);
+#if AP_WEB
+uint32 game_web_movie_open(uint32 resource, uint32 owner, uint32 overlay);
+void game_web_movie_prepare(uint32 resource, uint32 owner, uint32 overlay);
+uint32 game_web_movie_poll(uint32 owner);
+uint32 game_web_movie_decode(uint32 owner);
+void game_web_movie_close(void);
+uint32 game_web_movie_matches(uint32 id);
+uint32 game_web_movie_request(uint32 request);
+#endif
 
 typedef struct
 {
@@ -192,7 +210,7 @@ uint32 sub_800a2ee4(uint32 mode);
 uint32 cd_get_sector_async(uint32 dst, uint32 words);
 uint32 cd_audio_sector(void);
 uint32 cd_audio_ready(uint32 event, const uint8 *response);
-uint32 cd_stream_sector(void);
+uint32 cd_stream_sector(const uint8 *native_sector);
 sint32 DecDCToutSync(sint32 mode);
 uint32 sub_8002bdc4(void);
 uint32 guest_strlen(uint32 text);
@@ -980,7 +998,7 @@ uint32 sub_80044c28(uint32 index);
 
 /* Reviewed SDK identities awaiting shared interface integration */
 sint32 CdInit(void);
-void _bu_init(void);
+sint32 _bu_init(void);
 
 uint32 sub_8007a6cc(uint32 state, uint32 control, uint32 duration, const uint32 *native_context);
 uint32 sub_8007ac50(uint32 state, uint32 control, uint32 duration, const uint32 *native_context);

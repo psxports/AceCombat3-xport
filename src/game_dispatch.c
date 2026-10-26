@@ -249,7 +249,7 @@ uint32 game_dispatch(uint32 target, uint32 argument_count, uint32 argument0, uin
         case 0x8002B6D0:
             return (uint32)sub_8002b6d0();
         case 0x8002B760:
-            return (uint32)cd_stream_sector();
+            return (uint32)cd_stream_sector(NULL);
         case 0x8002BBE0:
             if (argument_count < 1)
                 break;

@@ -1,4 +1,6 @@
 #include "game_functions.h"
+#include <stdlib.h>
+#include <string.h>
 
 /* Complete draft bodies; runtime equivalence remains unverified */
 sint32 cd_resource_state(void)
@@ -299,7 +301,7 @@ uint32 cd_audio_sector(void)
         context = r_u32(0x800BCBAC);
         flags = ~r_u32(context);
         if ((flags & 0x400) && ((flags & 0x2000) || channel == r_u8(context + 29)))
-            cd_stream_sector();
+            cd_stream_sector(NULL);
     }
     context = r_u32(0x800BCBAC);
     result = r_u32(context + 20);
@@ -339,7 +341,7 @@ uint32 cd_audio_ready(uint32 event, const uint8 *response)
     return cd_audio_sector();
 }
 
-uint32 cd_stream_sector(void)
+uint32 cd_stream_sector(const uint8 *native_sector)
 {
     uint32 context;
     uint32 header;
@@ -365,7 +367,14 @@ uint32 cd_stream_sector(void)
     if (result == 2 || result == 4)
         return result;
     words = r_u32(context);
-    cd_get_sector(psx_addr(header, words << 2), words);
+    if (native_sector)
+    {
+        if (words > 8)
+            abort();
+        memcpy(psx_addr(header, words << 2), native_sector, words << 2);
+    }
+    else
+        cd_get_sector(psx_addr(header, words << 2), words);
     if (r_u8(header) != 1)
     {
         w_u8(header, 0);
@@ -437,7 +446,14 @@ uint32 cd_stream_sector(void)
     payload_words = r_u32(context + 4);
     header_words = r_u32(context);
     w_u32(context + 40, sequence);
-    cd_get_sector(psx_addr(payload, payload_words << 2), payload_words);
+    if (native_sector)
+    {
+        if (header_words + payload_words > 582)
+            abort();
+        memcpy(psx_addr(payload, payload_words << 2), native_sector + (header_words << 2), payload_words << 2);
+    }
+    else
+        cd_get_sector(psx_addr(payload, payload_words << 2), payload_words);
     context = r_u32(0x800BCBB4);
     sequence = r_u32(context + 40) + 1;
     count = r_u8(header + 2);
@@ -715,6 +731,10 @@ uint32 movie_configure(const MOVIE_CONFIG *config)
 uint32 movie_init_decoder(void)
 {
     FUNCTION_MARKER(0x80056B30, "ACE3.BIN");
+#if AP_WEB
+    w_u8(r_u32(0x800BD048) + 3, 1);
+    return 1;
+#endif
     DecDCTReset(0);
     DecDCTvlcSize2(0);
     DecDCToutCallback(movie_output_callback);
@@ -765,6 +785,12 @@ uint32 movie_queue_stream(void)
     uint32 enabled;
 
     FUNCTION_MARKER(0x80056D7C, "ACE3.BIN");
+#if AP_WEB
+    state = r_u32(0x800BD048);
+    flags = r_u32(r_u32(0x800BCD8C) + 4) ? 0x4000 : 0;
+    game_web_movie_prepare(r_u32(state + 0x11038), state, 0);
+    return sub_8002c928(r_u32(state + 0x11038), r_u32(state + 0x11040), r_u32(state + 0x1103C), flags, 0x80056C9C);
+#endif
     enabled = r_u32(r_u32(0x800BCD8C) + 4);
     state = r_u32(0x800BD048);
     flags = enabled ? 0x4000 : 0;
@@ -875,6 +901,10 @@ uint32 movie_wait_frame(uint32 nonblocking)
     sint32 remaining;
 
     FUNCTION_MARKER(0x80056DDC, "ACE3.BIN");
+#if AP_WEB
+    (void)nonblocking;
+    return game_web_movie_poll(r_u32(0x800BD048));
+#endif
     if (nonblocking)
         return sub_800572c8(r_u32(0x800BD048)) != 0;
     remaining = 120;
@@ -898,6 +928,9 @@ uint32 movie_wait_frame(uint32 nonblocking)
 uint32 movie_end(void)
 {
     FUNCTION_MARKER(0x80056E8C, "ACE3.BIN");
+#if AP_WEB
+    game_web_movie_close();
+#endif
     resource_init_queue(0, 0);
     DecDCToutCallback(NULL);
     return 1;
@@ -914,6 +947,10 @@ uint32 movie_decode(uint32 mode)
     sint32 words;
 
     FUNCTION_MARKER(0x80056EB8, "ACE3.BIN");
+#if AP_WEB
+    (void)mode;
+    return game_web_movie_decode(r_u32(0x800BD048));
+#endif
     state = r_u32(0x800BD048);
     if (r_u8(state + 4))
         return 1;
@@ -993,6 +1030,7 @@ uint32 sub_80057720(void)
                 goto submit_frame;
             }
             state = r_u32(0x800BD044);
+#if !AP_WEB
             value = r_u32(state + 64) - 1;
             w_u32(state + 64, value);
             if ((sint32)value <= 0)
@@ -1002,6 +1040,7 @@ uint32 sub_80057720(void)
 #endif
                 w_u8(r_u32(0x800BD048) + 4, 1);
             }
+#endif
             if (!r_u8(r_u32(0x800BD048) + 4))
                 return 0;
             if (r_u32(r_u32(0x800BCD8C) + 4))
@@ -1784,6 +1823,10 @@ uint32 resource_stream_request(uint32 request)
     uint32 id;
 
     FUNCTION_MARKER(0x8002C1D4, "ACE3.BIN");
+#if AP_WEB
+    if (game_web_movie_matches((uint32)r_s16(request + 2)))
+        return game_web_movie_request(request);
+#endif
     phase = r_u8(request + 1);
     if (!phase)
     {

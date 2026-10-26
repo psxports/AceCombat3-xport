@@ -1374,6 +1374,7 @@ uint32 resource_stop_cd(uint32 mode)
     uint32 command = 9;
 
     FUNCTION_MARKER(0x8002AC3C, "ACE3.BIN");
+    game_stop_resource_music();
     game_cd_ready_callback(0);
     game_cd_sync_callback(0);
     context = r_u32(0x800BCBAC);
@@ -1383,7 +1384,7 @@ uint32 resource_stop_cd(uint32 mode)
     w_u32(context + 32, 0);
     w_u32(other, 0);
     sub_8002999c(1);
-    if (CdSync(1, (uint8 *)psx_addr(r_u32(0x800BCBA8) + 40, 8)) != 2)
+    if (!game_use_extracted_assets() && CdSync(1, (uint8 *)psx_addr(r_u32(0x800BCBA8) + 40, 8)) != 2)
         return 0;
     if (mode)
         command = mode == 1 ? 7 : 8;
