@@ -1971,12 +1971,9 @@ uint32 sub_8002bd5c(void)
 
 uint32 sub_800a8ef8(uint32 driver_table)
 {
-    uint32 target, result;
     FUNCTION_MARKER(0x800A8EF8, "ACE3.BIN");
-    target = r_u32(driver_table + 56);
-    /* The GPU status callback has no semantic arguments */
-    result = xport_guest_call3(target, 0, 0, 0);
-    return result >> 31;
+    (void)driver_table;
+    return (uint32)GetODE();
 }
 
 uint32 sub_800a8ef0(void)

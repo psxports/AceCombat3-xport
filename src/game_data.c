@@ -35,13 +35,22 @@ static long game_file_length(FILE *file)
     return length;
 }
 
+static void game_select_resource_channel(uint32 entry)
+{
+    uint32 stream = r_u32(0x800BCBAC);
+    w_u8(stream + 29, (r_u32(entry) >> 19) & 31);
+    w_u32(r_u32(0x800BCBB0), 0);
+}
+
 #if AP_WEB
 static uint8 *game_movie_rgb, *game_movie_pixels;
 static XportFmvFrame game_movie_frame;
 static uint32 game_movie_pending, game_movie_overlay, game_movie_active, game_movie_resource, game_movie_done;
 static uint32 game_movie_owner;
 static FILE *game_movie_metadata;
-static uint32 game_movie_metadata_enabled;
+static uint32 game_movie_metadata_mode;
+static uint8 game_movie_metadata_record[520];
+static uint32 game_movie_metadata_remaining, game_movie_metadata_record_ready;
 
 uint32 game_web_movie_matches(uint32 id)
 {
@@ -53,7 +62,10 @@ uint32 game_web_movie_request(uint32 request)
     uint32 context = r_u32(0x800BCBBC);
     if (!r_u8(request + 1))
     {
-        game_web_movie_open(game_movie_resource, game_movie_owner, game_movie_overlay);
+        uint32 flags = r_u32(request + 12);
+        if (!(r_u16(request + 2) & 0x1000))
+            flags &= ~0x1000u;
+        game_web_movie_open(game_movie_resource, game_movie_owner, game_movie_overlay, flags);
         w_u32(context + 0x174, (uint32)r_s16(request + 2));
         w_u32(context + 0x168, 0);
         w_u8(request + 1, 1);
@@ -76,6 +88,7 @@ void game_web_movie_close(void)
     if (game_movie_metadata)
         fclose(game_movie_metadata);
     game_movie_metadata = NULL;
+    game_movie_metadata_mode = game_movie_metadata_remaining = game_movie_metadata_record_ready = 0;
 }
 
 void game_web_movie_prepare(uint32 resource, uint32 owner, uint32 overlay)
@@ -87,12 +100,14 @@ void game_web_movie_prepare(uint32 resource, uint32 owner, uint32 overlay)
     game_movie_active = 1;
 }
 
-uint32 game_web_movie_open(uint32 resource, uint32 owner, uint32 overlay)
+uint32 game_web_movie_open(uint32 resource, uint32 owner, uint32 overlay, uint32 flags)
 {
     char path[64];
+    long length;
     game_web_movie_close();
     game_stop_resource_music();
     resource_stop_cd(0);
+    game_select_resource_channel(resource_get_entry(resource));
     snprintf(path, sizeof(path), "DATA/%u/VIDEO/%u.STR", game_data_disc, resource & 0x7FF);
     game_movie_rgb = malloc(640 * 256 * 3);
     game_movie_pixels = malloc(640 * 256 * 3);
@@ -105,17 +120,49 @@ uint32 game_web_movie_open(uint32 resource, uint32 owner, uint32 overlay)
     game_movie_overlay = overlay;
     game_movie_active = 1;
     game_movie_resource = resource;
-    game_movie_metadata_enabled = !overlay && r_u32(r_u32(0x800BCD8C) + 4);
-    if (game_movie_metadata_enabled)
+    game_movie_metadata_mode = flags & 0x1000 ? 2 : flags & 0x4000 ? 1 : 0;
+    if (game_movie_metadata_mode)
     {
-        snprintf(path, sizeof(path), "ACE_META/%u", resource & 0x7FF);
+        snprintf(path, sizeof(path), "%s/%u", game_movie_metadata_mode == 2 ? "ACE_META_AUX" : "ACE_META", resource & 0x7FF);
         game_movie_metadata = game_data_open(game_data_disc, path);
         if (!game_movie_metadata)
             abort();
+        length = game_file_length(game_movie_metadata);
+        if (length < 0 || length % (game_movie_metadata_mode == 2 ? 520 : 20))
+            abort();
+        game_movie_metadata_remaining = (uint32)length;
     }
     sub_8002999c(0);
     w_u8(owner + 4, 0);
     w_u8(owner + 3, 1);
+    return 1;
+}
+
+static uint32 game_web_movie_metadata_ready(void)
+{
+    if (game_movie_metadata_mode != 2)
+        return 1;
+    while (game_movie_metadata)
+    {
+        if (!game_movie_metadata_record_ready)
+        {
+            if (!game_movie_metadata_remaining)
+            {
+                fclose(game_movie_metadata);
+                game_movie_metadata = NULL;
+                break;
+            }
+            if (xport_fread(game_movie_metadata_record, 1, 520, game_movie_metadata) != 520)
+                abort();
+            game_movie_metadata_remaining -= 520;
+            game_movie_metadata_record_ready = 1;
+        }
+        if (game_movie_pending != 2 && xport_load_le32(game_movie_metadata_record) > game_movie_frame.number)
+            break;
+        if (!game_cd_publish_metadata(game_movie_metadata_record + 4))
+            return 0;
+        game_movie_metadata_record_ready = 0;
+    }
     return 1;
 }
 
@@ -125,7 +172,7 @@ uint32 game_web_movie_poll(uint32 owner)
     if (!game_movie_rgb)
         return 0;
     if (game_movie_pending)
-        return 1;
+        goto metadata;
     result = xport_fmv_next(game_movie_rgb, 640 * 256 * 3, &game_movie_frame);
     if (result < 0)
     {
@@ -136,9 +183,7 @@ uint32 game_web_movie_poll(uint32 owner)
     if (!result)
         return 0;
     game_movie_pending = (uint32)result;
-    if (result == 2)
-        game_movie_done = 1;
-    else
+    if (result == 1)
     {
         uint32 coordinates = game_movie_overlay ? 56 : 24;
         uint32 dimensions = game_movie_overlay ? 76 : 44;
@@ -148,7 +193,7 @@ uint32 game_web_movie_poll(uint32 owner)
         w_u16(owner + coordinates + 12, width);
         w_u16(owner + coordinates + 14, game_movie_frame.height);
         w_u16(owner + dimensions + 2, game_movie_frame.height);
-        if (game_movie_metadata_enabled)
+        if (game_movie_metadata_mode == 1)
         {
             uint8 record[20];
             uint32 entry = resource_get_entry(game_movie_resource);
@@ -161,6 +206,11 @@ uint32 game_web_movie_poll(uint32 owner)
             memcpy(psx_addr(table + 4 + channel * 16, 16), record + 4, 16);
         }
     }
+metadata:
+    if (!game_web_movie_metadata_ready())
+        return 0;
+    if (game_movie_pending == 2)
+        game_movie_done = 1;
     return 1;
 }
 
@@ -237,6 +287,7 @@ sint32 game_start_resource_music(uint32 start, uint32 callback, uint32 flags, ui
     sectors = (r_u32(entry) & 0x7FFFF) << ((r_u32(entry) >> 24) & 7);
     if (offset >= sectors)
         abort();
+    game_select_resource_channel(entry);
     if ((id & 0x7FF) >= 36 && (id & 0x7FF) <= 70 && offset)
         snprintf(path, sizeof(path), "MUSIC/%u_%u_%u.XA", game_data_disc, id & 0x7FF, offset);
     else if ((id & 0x7FF) >= 36 && (id & 0x7FF) <= 70)

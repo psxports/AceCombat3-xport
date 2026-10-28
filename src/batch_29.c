@@ -1896,14 +1896,22 @@ uint32 resource002_sub_800da674(uint32 game)
     {
         context = r_u32(0x80112DDC);
         value = r_u8(context + 6);
+#if 0
         w_u8(context + 6, value < 3 ? value + 1 : 0);
+#else
+        w_u8(context + 6, value == 0 ? 3 : 0);
+#endif
         sub_8002db4c(61);
     }
     if (r_u32(r_u32(0x800BCE60) + 304) & 1)
     {
         context = r_u32(0x80112DDC);
         value = r_u8(context + 6);
+#if 0
         w_u8(context + 6, value ? value - 1 : 3);
+#else
+        w_u8(context + 6, value == 0 ? 3 : 0);
+#endif
         sub_8002db4c(61);
     }
     game = r_u32(0x800BCE60);
@@ -1948,7 +1956,11 @@ uint32 resource002_sub_800da870(void)
 
 uint32 resource002_sub_800da878(uint32 game)
 {
+#if 0
     uint32 phase, context, action, choice, result, state, value, index;
+#else
+    uint32 phase, context, action, choice, result, index;
+#endif
     FUNCTION_MARKER(0x800DA878, "ACE3.BIN");
     if ((r_u32(game + 300) & 16) && !(r_u32(game + 296) & 0x2F))
         resource002_sub_800dee08(1, 0, 0, 0);
@@ -1970,6 +1982,7 @@ uint32 resource002_sub_800da878(uint32 game)
                 for (index = 304; index <= 320; index += 4)
                     result = sub_8002dda8(r_u32(r_u32(0x80112DC4) + index));
                 return result;
+#if 0
             case 1:
                 w_u8(context + 1, 5);
                 resource002_sub_800deca8(2, 14);
@@ -1986,6 +1999,7 @@ uint32 resource002_sub_800da878(uint32 game)
                 result = r_u16(state + 12);
                 w_u16(context + 264, result);
                 return result;
+#endif
             case 3:
                 w_u8(context + 1, 7);
                 return 7;

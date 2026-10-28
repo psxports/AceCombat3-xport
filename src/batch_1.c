@@ -12,7 +12,6 @@ void game_run(void)
     uint32 args;
     uint32 result;
     uint32 frame_ready;
-    uint32 pending_display = 0;
     uint32 previous_draw_complete = 0;
     PSX_RECT previous_draw = {0};
 
@@ -51,14 +50,6 @@ void game_run(void)
         state = r_u32(0x800BCE60);
         w_u32(state + 0x20, result);
         ResetRCnt(0xF2000001);
-        /* Publish the completed page before the next original flip */
-        if (pending_display && !gpu_frame_skipped())
-        {
-            gpu_frame_end();
-            gpu_present();
-            gpu_frame_begin();
-            pending_display = 0;
-        }
         sub_800260c0();
         state = r_u32(0x800BCE60);
         flags = r_u32(state);
@@ -68,7 +59,6 @@ void game_run(void)
             DrawSync(0);
         }
         frame_ready = game_frame_display_ready(&previous_draw, &previous_draw_complete);
-        pending_display = frame_ready && gpu_frame_skipped();
         gpu_frame_end();
         if (frame_ready)
             gpu_present();
@@ -1453,6 +1443,9 @@ sint32 resource_begin_read(uint32 entry, uint32 dst, uint32 aux, uint32 callback
                 w_u32(r_u32(0x800BCBB0), 0);
                 if (!loaded)
                 {
+#ifndef NDEBUG
+                    fprintf(stderr, "Extracted BP read failed: entry=%08X native=%p destination=%08X bytes=%u table=%08X resource=%08X\n", entry, (const void *)native_entry, dst, units * 4, r_u32(state + 0x18), r_u32(r_u32(0x800BCBBC) + 0x174));
+#endif
                     xport_message_error("Ace Combat 3 - Resource error", "Cannot read extracted ACE_BPB resource");
                     abort();
                 }
@@ -2073,6 +2066,9 @@ uint32 sub_80026e84(void)
         return 0;
     pad_input_field = result;
     state = r_u32(0x800BCB84);
+#if !defined(LOCKSTEP_DEBUG)
+    game_pad_refresh_connection(state);
+#endif
     if (r_u16(state) == 0x8000)
     {
         packet = state + 2;

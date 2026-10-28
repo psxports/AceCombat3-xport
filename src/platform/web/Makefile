@@ -8,7 +8,7 @@ WEB_EXCLUDE_FILES := \
     DATA/1/SLPS_020.20 DATA/2/SLPS_020.21 \
     DATA/1/SYSTEM.CNF DATA/2/SYSTEM.CNF
 include extracted_exclusions.mk
-APP_SOURCES := $(wildcard ../../../src/batch_*.c) ../../../src/game_main.c ../../../src/game_sdk.c ../../../src/game_data.c ../../../src/game_dispatch.c
+APP_SOURCES := $(wildcard ../../../src/batch_*.c) ../../../src/game_main.c ../../../src/game_sdk.c ../../../src/game_data.c ../../../src/game_save.c ../../../src/game_dispatch.c
 APP_DEFINES := -DXPORT_NATIVE_CD=1 -DXPORT_NATIVE_CALLBACK_BOOTSTRAP=1 -DMDEC_CUSTOM=1 -DXPORT_EXTRACTED_ASSETS=1 -DXPORT_PAD_HACK=0 -DFIELD_RATE=60 -DWND_WIDTH=960 -DWND_HEIGHT=720
 APP_DEFINES += -DWND_TITLE=\"AC3\"
 ifeq ($(CONFIG),Release)

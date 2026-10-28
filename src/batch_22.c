@@ -1974,7 +1974,13 @@ static uint32 resource002_command_final_call(uint32 target)
 
 uint32 resource002_sub_800e22e4(uint32 index, uint32 group)
 {
+#if 0
     uint32 state, table, ordering, stream, command, context, target;
+#else
+    uint32 state, table, ordering, stream, command, context, target;
+    uint32 settings_panel = 0;
+    sint32 saved_y;
+#endif
 
     FUNCTION_MARKER(0x800E22E4, "ACE3.BIN");
     state = r_u32(0x80112DC4);
@@ -1990,7 +1996,32 @@ uint32 resource002_sub_800e22e4(uint32 index, uint32 group)
         command = r_u32(stream);
         context = r_u32(state + group * 4 + 364);
         target = r_u32(0x8010AEC4 + command * 4);
+#if 0
         stream = resource002_command_call(target, stream + 4, ordering, context + index * 12);
+#else
+        /* Settings panel order is audio, brightness, screen, game, footer */
+        if (group == 2 && index == 12)
+        {
+            static const uint8 command_bytes[] = {24, 32, 16, 36, 20, 20, 24};
+            if (command == 5)
+                ++settings_panel;
+            if (settings_panel == 2 || settings_panel == 3 ||
+                (settings_panel == 5 && command == 0 && r_s16(stream + 6) >= 261))
+            {
+                if (command >= sizeof(command_bytes))
+                    abort();
+                stream += command_bytes[command];
+                command = r_u32(stream);
+                continue;
+            }
+        }
+        saved_y = r_s16(context + index * 12 + 6);
+        if (group == 2 && index == 12 && settings_panel == 4)
+            w_u16(context + index * 12 + 6, (uint32)(saved_y - 136));
+        stream = resource002_command_call(target, stream + 4, ordering, context + index * 12);
+        if (group == 2 && index == 12 && settings_panel == 4)
+        w_u16(context + index * 12 + 6, (uint32)saved_y);
+#endif
         command = r_u32(stream);
     }
     table = r_u32(0x8010B060 + group * 4);

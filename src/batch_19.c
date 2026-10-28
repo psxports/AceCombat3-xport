@@ -589,7 +589,18 @@ uint32 resource001_sub_800ccd48(void)
     {
         state = r_u32(0x800DD9D0);
         root = r_u32(0x800BCE48);
+#if 0
+        /* Original link-mode selection */
         w_u16(state + 12, 2);
+#else
+        w_u16(state + 12, game_account_load() ? 6 : 3);
+        /* Keep the menu XA descriptor previously initialized by link mode */
+        w_u16(state + 124, 0x83D);
+        w_u16(state + 126, 0);
+        w_u16(state + 128, 0);
+        w_u16(state + 130, 0);
+        w_u32(state + 132, 0);
+#endif
         w_u16(state + 14, 0);
         w_u16(state + 16, 0);
         flags = r_u32(root);
@@ -639,6 +650,8 @@ uint32 resource001_sub_800d75e4(void)
 
 uint32 resource001_sub_800d7600(void)
 {
+#if 0
+    /* Original memory-card completion and event teardown */
     uint32 result, state;
 
     FUNCTION_MARKER(0x800D7600, "ACE3.BIN");
@@ -652,6 +665,12 @@ uint32 resource001_sub_800d7600(void)
         result = 1;
     }
     return result;
+#else
+    uint32 state = r_u32(0x800DD9D0);
+    w_u32(state + 24, 0);
+    w_u8(state + 88, 1);
+    return 1;
+#endif
 }
 
 void resource001_sub_800d1798(void)
@@ -1734,7 +1753,12 @@ uint32 resource001_sub_800ce5ac(void)
                 state = r_u32(0x800DD9D0);
                 w_u8(state + 91, 0);
                 state = r_u32(0x800DD9D0);
+#if 0
+                /* Original return to link-mode selection */
                 w_u16(state + 12, 2);
+#else
+                w_u16(state + 12, 1);
+#endif
                 w_u16(state + 14, 0);
                 w_u16(state + 16, 0);
                 resource001_sub_800da77c(7);
@@ -1923,9 +1947,23 @@ uint32 resource001_sub_800cecf8(void)
     }
     else if (buttons & 0x10)
     {
+#if 0
+        /* Original configuration and memory-card setup sequence */
         state = r_u32(0x800DD9D0);
         w_u16(state + 76, 3);
         w_u16(state + 78, 0);
+#else
+        resource001_sub_800da1b8();
+        game = r_u32(0x800BCE60);
+        w_u16(game + 908, 1);
+        w_u16(game + 0x954, 2);
+        w_u32(game + 0x968, resource001_sub_800d4140());
+        if (!game_account_save())
+            return 0;
+        state = r_u32(0x800DD9D0);
+        w_u16(state + 12, 6);
+        w_u16(state + 14, 0);
+#endif
         sub_8002db4c(89);
     }
     else if (directions & 3)

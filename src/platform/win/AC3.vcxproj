@@ -87,7 +87,7 @@
     <ClCompile Include="..\..\batch_32.c" />
     <ClCompile Include="..\..\batch_33.c" />
     <ClCompile Include="..\..\batch_34.c" />
-    <ClCompile Include="..\..\game_sdk.c" /><ClCompile Include="..\..\game_data.c" />
+    <ClCompile Include="..\..\game_sdk.c" /><ClCompile Include="..\..\game_data.c" /><ClCompile Include="..\..\game_save.c" />
     <ClCompile Include="..\..\game_dispatch.c" />
     <ClInclude Include="..\..\game_functions.h" />
   </ItemGroup>

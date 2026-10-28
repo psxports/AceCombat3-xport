@@ -1414,7 +1414,7 @@ uint32 sub_8008fc9c(uint32 ordering, uint32 packet, uint32 strength)
         for (i = 0; i < 4; ++i, current += 40)
         {
             w_u32(current, ((current + 40) & 0xFFFFFF) | 0x09000000);
-            w_u16(current + 14, (page >> 4) | (i & 2) | 0x120);
+            w_u16(current + 22, (page >> 4) | (i & 2) | 0x120);
             left = (i & 2) != 0 ? 160 : 0;
             right = left + 160;
             w_u16(current + 24, left);

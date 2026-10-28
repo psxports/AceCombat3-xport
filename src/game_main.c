@@ -1,6 +1,29 @@
 #include "game_functions.h"
 #include <string.h>
 
+void game_pad_refresh_connection(uint32 input_state)
+{
+    static uint8 available[2] = {255, 255};
+    uint8 axes[4];
+    uint32 controller, analog, port;
+    for (controller = 0; controller < 2; ++controller)
+    {
+        xport_input_read((sint32)controller);
+        analog = xport_input_analog((sint32)controller, axes) != 0;
+        if (available[controller] != analog)
+        {
+            port = input_state + 0x44 + controller * 0x40;
+            if (available[controller] != 255 && r_u8(r_u32(port + 4) + 12))
+            {
+                /* Reuse original negotiation when the host input device changes */
+                w_u8(port + 1, 0);
+                w_u8(port + 14, 1);
+            }
+            available[controller] = (uint8)analog;
+        }
+    }
+}
+
 static uint32 game_frame_contains(const PSX_RECT *draw, const PSX_RECT *display)
 {
     return draw->w > 0 && draw->h > 0 && display->w > 0 && display->h > 0 &&
@@ -16,7 +39,7 @@ uint32 game_frame_display_ready(PSX_RECT *previous_draw, uint32 *previous_comple
     uint32 draw_address = r_u32(buffer);
     uint32 display_address = r_u32(buffer + 4);
     uint32 movie = r_u32(game) & 4;
-    uint32 complete = !gpu_frame_skipped() && !movie;
+    uint32 complete = !movie;
     uint32 ready;
     PSX_RECT draw, display;
     draw.x = r_s16(draw_address);
@@ -27,7 +50,7 @@ uint32 game_frame_display_ready(PSX_RECT *previous_draw, uint32 *previous_comple
     display.y = r_s16(display_address + 2);
     display.w = r_s16(display_address + 4);
     display.h = r_s16(display_address + 6);
-    /* A skipped OT leaves its page unchanged even after the original flip */
+    /* Present only a completed draw page or movie frame */
     ready = movie || (complete && game_frame_contains(&draw, &display)) ||
             (*previous_complete && game_frame_contains(previous_draw, &display));
     if (movie)
@@ -42,11 +65,6 @@ uint32 game_frame_display_ready(PSX_RECT *previous_draw, uint32 *previous_comple
 
 #if AP_WEB && defined(_DEBUG)
     #include <emscripten.h>
-EMSCRIPTEN_KEEPALIVE void game_web_debug_frame_skip(sint32 enabled)
-{
-    gpu_set_frame_skip(enabled);
-}
-
 EMSCRIPTEN_KEEPALIVE const uint32 *game_web_debug_snapshot(void)
 {
     static uint32 snapshot[34];
@@ -89,8 +107,8 @@ EMSCRIPTEN_KEEPALIVE const uint32 *game_web_debug_snapshot(void)
     snapshot[28] = (uint16)display.disp.x | ((uint32)(uint16)display.disp.y << 16);
     snapshot[29] = (uint16)display.disp.w | ((uint32)(uint16)display.disp.h << 16);
     snapshot[30] = display.isrgb24;
-    snapshot[31] = gpu_frame_skipped();
-    snapshot[32] = gpu_skipped_frames();
+    snapshot[31] = 0;
+    snapshot[32] = 0;
     snapshot[33] = gpu_get_raster();
     return snapshot;
 }

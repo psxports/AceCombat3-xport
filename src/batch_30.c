@@ -1050,6 +1050,8 @@ uint32 resource002_sub_80100fac(void)
 
 uint32 resource002_sub_800eb9ec(void)
 {
+#if 0
+    /* Original save-account and memory-card screen sequence */
     uint32 state, value, index, buffer, game, next;
     FUNCTION_MARKER(0x800EB9EC, "ACE3.BIN");
     state = r_u32(0x80112DC4);
@@ -1090,6 +1092,10 @@ uint32 resource002_sub_800eb9ec(void)
     resource002_sub_800dee08(15, 1, 0, 20);
     value = r_u32(r_u32(0x80112DA8) + 20);
     return resource002_sub_800ff19c(value ? 3 : 0);
+#else
+    FUNCTION_MARKER(0x800EB9EC, "ACE3.BIN");
+    return game_account_save_requested(r_u32(0x80112DC4));
+#endif
 }
 
 uint32 resource002_sub_800ebbd0(void)

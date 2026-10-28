@@ -8,6 +8,10 @@ uint32 game_dispatch(uint32 target, uint32 argument_count, uint32 argument0, uin
     #include "psx_press.h"
 
 const char *game_native_string(uint32 address);
+void game_pad_refresh_connection(uint32 input_state);
+sint32 game_account_save(void);
+sint32 game_account_load(void);
+uint32 game_account_save_requested(uint32 state);
 uint32 game_cd_copy_sector(uint32 destination, uint32 words);
 uint32 game_cd_read_resource_sector_sync(void);
 void game_cd_cancel_data_notification(void);
@@ -26,7 +30,7 @@ sint32 game_resource_music_active(void);
 void game_poll_resource_music(void);
 void game_stop_resource_music(void);
 #if AP_WEB
-uint32 game_web_movie_open(uint32 resource, uint32 owner, uint32 overlay);
+uint32 game_web_movie_open(uint32 resource, uint32 owner, uint32 overlay, uint32 flags);
 void game_web_movie_prepare(uint32 resource, uint32 owner, uint32 overlay);
 uint32 game_web_movie_poll(uint32 owner);
 uint32 game_web_movie_decode(uint32 owner);
